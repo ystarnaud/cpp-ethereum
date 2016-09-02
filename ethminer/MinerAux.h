@@ -691,7 +691,7 @@ private:
 			this_thread::sleep_for(chrono::seconds(i ? _trialDuration : _warmupDuration));
 
 			auto mp = f.miningProgress();
-			f.resetMiningProgress();
+			//f.resetMiningProgress();
 			if (!i)
 				continue;
 			auto rate = mp.rate();
@@ -777,7 +777,7 @@ private:
 			for (unsigned i = 0; !completed; ++i)
 			{
 				auto mp = f.miningProgress();
-				f.resetMiningProgress();
+				//f.resetMiningProgress();
 
 				cnote << "Mining on difficulty " << difficulty << " " << mp;
 				this_thread::sleep_for(chrono::milliseconds(1000));
@@ -861,7 +861,7 @@ private:
 				for (unsigned i = 0; !completed; ++i)
 				{
 					auto mp = f.miningProgress();
-					f.resetMiningProgress();
+				//	f.resetMiningProgress();
 					if (current)
 						minelog << "Mining on PoWhash" << "#" + (current.headerHash.hex().substr(0, 8)) << ": " << mp << f.getSolutionStats();
 					else
@@ -1016,7 +1016,7 @@ private:
 			while (client.isRunning())
 			{
 				auto mp = f.miningProgress();
-				f.resetMiningProgress();
+			//	f.resetMiningProgress();
 				if (client.isConnected())
 				{
 					if (client.current())
@@ -1051,7 +1051,7 @@ private:
 			while (client.isRunning())
 			{
 				auto mp = f.miningProgress();
-				f.resetMiningProgress();
+			//	f.resetMiningProgress();
 				if (client.isConnected())
 				{
 					if (client.current())
