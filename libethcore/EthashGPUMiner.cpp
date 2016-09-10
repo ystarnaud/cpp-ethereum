@@ -152,7 +152,11 @@ void EthashGPUMiner::workLoop()
 			cnote << "Initialising miner...";
 			m_minerSeed = w.seedHash;
 
-			delete m_miner;
+      if (m_miner) {
+        m_miner->free_memory();
+        delete m_miner;
+      }
+
 			m_miner = new ethash_cl_miner;
 
 			unsigned device = s_devices[index()] > -1 ? s_devices[index()] : index();

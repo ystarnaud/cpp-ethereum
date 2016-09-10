@@ -106,6 +106,7 @@ ethash_cl_miner::ethash_cl_miner()
 ethash_cl_miner::~ethash_cl_miner()
 {
 	finish();
+  free_memory();
 }
 
 std::vector<cl::Platform> ethash_cl_miner::getPlatforms()
@@ -325,10 +326,25 @@ void ethash_cl_miner::finish()
 		m_queue.finish();
 }
 
+void ethash_cl_miner::free_memory()
+{
+  vector<cl::Buffer> buffers;
+
+  buffers.push_back(m_dag);
+  buffers.push_back(m_light);
+  buffers.push_back(m_header);
+
+  for (unsigned i = 0; i != c_bufferCount; ++i)
+  {
+    buffers.push_back(m_searchBuffer[i]);
+  }
+
+  buffers.clear();
+}
 
 bool ethash_cl_miner::init(
-	ethash_light_t _light, 
-	uint8_t const* _lightData, 
+	ethash_light_t _light,
+	uint8_t const* _lightData,
 	uint64_t _lightSize,
 	unsigned _platformId,
 	unsigned _deviceId
@@ -498,7 +514,7 @@ bool ethash_cl_miner::init(
 	return true;
 }
 
-typedef struct 
+typedef struct
 {
 	uint64_t start_nonce;
 	unsigned buf;
@@ -528,7 +544,7 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 
 		// pass these to stop the compiler unrolling the loops
 		m_searchKernel.setArg(4, target);
-		
+
 		unsigned buf = 0;
 		random_device engine;
 		uint64_t start_nonce;
