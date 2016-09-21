@@ -51,9 +51,8 @@ void EthStratumClient::connect()
 	tcp::resolver r(m_io_service);
 	tcp::resolver::query q(p_active->host, p_active->port);
 	
-	r.async_resolve(q, boost::bind(&EthStratumClient::resolve_handler,
-																	this, boost::asio::placeholders::error,
-																	boost::asio::placeholders::iterator));
+	r.async_resolve(q, boost::bind(&EthStratumClient::resolve_handler, this, 
+		boost::asio::placeholders::error, boost::asio::placeholders::iterator));
 	
 	cnote << "Connecting to stratum server " << p_active->host + ":" + p_active->port;
 
@@ -130,13 +129,12 @@ void EthStratumClient::resolve_handler(const boost::system::error_code& ec, tcp:
 {
 	if (!ec)
 	{
-		async_connect(m_socket, i, boost::bind(&EthStratumClient::connect_handler,
-																					this, boost::asio::placeholders::error,
-																					boost::asio::placeholders::iterator));
+		async_connect(m_socket, i, boost::bind(&EthStratumClient::connect_handler, this, 
+			boost::asio::placeholders::error, boost::asio::placeholders::iterator));
 	}
 	else
 	{
-		cerr << "Could not resolve host" << p_active->host + ":" + p_active->port + ", " << ec.message();
+		cerr << "Could not resolve host " << p_active->host + ":" + p_active->port + ", " << ec.message();
 		reconnect();
 	}
 }
