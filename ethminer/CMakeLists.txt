@@ -1,6 +1,6 @@
 cmake_policy(SET CMP0015 NEW)
 set(CMAKE_AUTOMOC OFF)
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -fpermissive")
 aux_source_directory(. SRC_LIST)
 
 include_directories(BEFORE ..)
@@ -38,7 +38,9 @@ target_link_libraries(${EXECUTABLE} ethash)
 target_link_libraries(${EXECUTABLE} devcore)
 
 if (ETHSTRATUM)
-target_link_libraries(${EXECUTABLE} ethstratum)
+	include_directories(BEFORE ${JSONCPP_INCLUDE_DIRS})
+	target_link_libraries(${EXECUTABLE} ethstratum)
+	target_link_libraries(${EXECUTABLE} ${JSONCPP_LIBRARIES})
 endif()
 
 if (DEFINED WIN32 AND NOT DEFINED CMAKE_COMPILER_IS_MINGW)

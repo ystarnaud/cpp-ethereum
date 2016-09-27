@@ -37,7 +37,7 @@ __constant uint2 const Keccak_f1600_RC[24] = {
 };
 
 #if PLATFORM == OPENCL_PLATFORM_NVIDIA && COMPUTE >= 35
-static uint2 ROL2(const uint2 a, const int offset) {
+uint2 ROL2(const uint2 a, const int offset) {
 	uint2 result;
 	if (offset >= 32) {
 		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(a.x), "r"(a.y), "r"(offset));
@@ -51,7 +51,7 @@ static uint2 ROL2(const uint2 a, const int offset) {
 }
 #elif PLATFORM == OPENCL_PLATFORM_AMD
 #pragma OPENCL EXTENSION cl_amd_media_ops : enable
-static uint2 ROL2(const uint2 vv, const int r)
+uint2 ROL2(const uint2 vv, const int r)
 {
 	if (r <= 32)
 	{
@@ -63,7 +63,7 @@ static uint2 ROL2(const uint2 vv, const int r)
 	}
 }
 #else
-static uint2 ROL2(const uint2 v, const int n)
+uint2 ROL2(const uint2 v, const int n)
 {
 	uint2 result;
 	if (n <= 32)
@@ -80,16 +80,16 @@ static uint2 ROL2(const uint2 v, const int n)
 }
 #endif
 
-static void chi(uint2 * a, const uint n, const uint2 * t)
+void chi(uint2 * a, const uint n, const uint2 * t)
 {
-	a[n+0] = bitselect(t[n + 0] ^ t[n + 2], t[n + 0], t[n + 1]);
-	a[n+1] = bitselect(t[n + 1] ^ t[n + 3], t[n + 1], t[n + 2]);
-	a[n+2] = bitselect(t[n + 2] ^ t[n + 4], t[n + 2], t[n + 3]);
-	a[n+3] = bitselect(t[n + 3] ^ t[n + 0], t[n + 3], t[n + 4]);
-	a[n+4] = bitselect(t[n + 4] ^ t[n + 1], t[n + 4], t[n + 0]);
+	a[n + 0] = bitselect(t[n + 0] ^ t[n + 2], t[n + 0], t[n + 1]);
+	a[n + 1] = bitselect(t[n + 1] ^ t[n + 3], t[n + 1], t[n + 2]);
+	a[n + 2] = bitselect(t[n + 2] ^ t[n + 4], t[n + 2], t[n + 3]);
+	a[n + 3] = bitselect(t[n + 3] ^ t[n + 0], t[n + 3], t[n + 4]);
+	a[n + 4] = bitselect(t[n + 4] ^ t[n + 1], t[n + 4], t[n + 0]);
 }
 
-static void keccak_f1600_round(uint2* a, uint r)
+void keccak_f1600_round(uint2* a, uint r)
 {
 	uint2 t[25];
 	uint2 u;
@@ -133,35 +133,35 @@ static void keccak_f1600_round(uint2* a, uint r)
 
 	// Rho Pi
 
-	t[0]  = a[0];
+	t[0] = a[0];
 	t[10] = ROL2(a[1], 1);
 	t[20] = ROL2(a[2], 62);
-	t[5]  = ROL2(a[3], 28);
+	t[5] = ROL2(a[3], 28);
 	t[15] = ROL2(a[4], 27);
-	
+
 	t[16] = ROL2(a[5], 36);
-	t[1]  = ROL2(a[6], 44);
+	t[1] = ROL2(a[6], 44);
 	t[11] = ROL2(a[7], 6);
 	t[21] = ROL2(a[8], 55);
-	t[6]  = ROL2(a[9], 20);
-	
-	t[7]  = ROL2(a[10], 3);
+	t[6] = ROL2(a[9], 20);
+
+	t[7] = ROL2(a[10], 3);
 	t[17] = ROL2(a[11], 10);
-	t[2]  = ROL2(a[12], 43);
+	t[2] = ROL2(a[12], 43);
 	t[12] = ROL2(a[13], 25);
 	t[22] = ROL2(a[14], 39);
-	
+
 	t[23] = ROL2(a[15], 41);
-	t[8]  = ROL2(a[16], 45);
+	t[8] = ROL2(a[16], 45);
 	t[18] = ROL2(a[17], 15);
-	t[3]  = ROL2(a[18], 21);
+	t[3] = ROL2(a[18], 21);
 	t[13] = ROL2(a[19], 8);
-	
+
 	t[14] = ROL2(a[20], 18);
 	t[24] = ROL2(a[21], 2);
-	t[9]  = ROL2(a[22], 61);
+	t[9] = ROL2(a[22], 61);
 	t[19] = ROL2(a[23], 56);
-	t[4]  = ROL2(a[24], 14);
+	t[4] = ROL2(a[24], 14);
 
 	// Chi
 	chi(a, 0, t);
@@ -175,13 +175,13 @@ static void keccak_f1600_round(uint2* a, uint r)
 	chi(a, 20, t);
 }
 
-static void keccak_f1600_no_absorb(uint2* a, uint out_size, uint isolate)
+void keccak_f1600_no_absorb(uint2* a, uint out_size, uint isolate)
 {
 	// Originally I unrolled the first and last rounds to interface
 	// better with surrounding code, however I haven't done this
 	// without causing the AMD compiler to blow up the VGPR usage.
 
-	
+
 	//uint o = 25;
 	for (uint r = 0; r < 24;)
 	{
@@ -197,8 +197,8 @@ static void keccak_f1600_no_absorb(uint2* a, uint out_size, uint isolate)
 			keccak_f1600_round(a, r++);
 			//if (r == 23) o = out_size;
 		}
-	} 
-	
+	}
+
 
 	// final round optimised for digest size
 	//keccak_f1600_round(a, 23, out_size);
@@ -206,17 +206,17 @@ static void keccak_f1600_no_absorb(uint2* a, uint out_size, uint isolate)
 
 #define copy(dst, src, count) for (uint i = 0; i != count; ++i) { (dst)[i] = (src)[i]; }
 
-static uint fnv(uint x, uint y)
+uint fnv(uint x, uint y)
 {
 	return x * FNV_PRIME ^ y;
 }
 
-static uint4 fnv4(uint4 x, uint4 y)
+uint4 fnv4(uint4 x, uint4 y)
 {
 	return x * FNV_PRIME ^ y;
 }
 
-static uint fnv_reduce(uint4 v)
+uint fnv_reduce(uint4 v)
 {
 	return fnv(fnv(fnv(v.x, v.y), v.z), v.w);
 }
@@ -253,13 +253,13 @@ typedef union {
 __attribute__((reqd_work_group_size(GROUP_SIZE, 1, 1)))
 #endif
 __kernel void ethash_search(
-	__global volatile uint* restrict g_output,
-	__constant hash32_t const* g_header,
-	__global hash128_t const* g_dag,
-	ulong start_nonce,
-	ulong target,
-	uint isolate
-	)
+__global volatile uint* restrict g_output,
+__constant hash32_t const* g_header,
+__global hash128_t const* g_dag,
+ulong start_nonce,
+ulong target,
+uint isolate
+)
 {
 	__local compute_hash_share share[HASHES_PER_LOOP];
 
@@ -280,7 +280,7 @@ __kernel void ethash_search(
 	state[8] = 0x8000000000000000;
 
 	keccak_f1600_no_absorb((uint2*)state, 8, isolate);
-	
+
 	// Threads work together in this phase in groups of 8.
 	uint const thread_id = gid & 7;
 	uint const hash_id = (gid % GROUP_SIZE) >> 3;
@@ -294,7 +294,7 @@ __kernel void ethash_search(
 		barrier(CLK_LOCAL_MEM_FENCE);
 
 		uint4 mix = share[hash_id].uint4s[thread_id & 3];
-		barrier(CLK_LOCAL_MEM_FENCE);
+			barrier(CLK_LOCAL_MEM_FENCE);
 
 		__local uint *share0 = share[hash_id].uints;
 
@@ -346,7 +346,7 @@ __kernel void ethash_search(
 	}
 }
 
-static void SHA3_512(uint2* s, uint isolate)
+void SHA3_512(uint2* s, uint isolate)
 {
 	for (uint i = 8; i != 25; ++i)
 	{
