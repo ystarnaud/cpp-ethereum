@@ -64,7 +64,7 @@ public:
 			s_devices[i] = _devices[i];
 		}
 	}
-
+	
 protected:
 	void kickOff() override;
 	void pause() override;

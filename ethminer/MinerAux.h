@@ -297,6 +297,8 @@ public:
 #if ETH_ETHASHCL || !ETH_TRUE
 		else if (arg == "--allow-opencl-cpu")
 			m_clAllowCPU = true;
+		else if (arg == "--smoother-stats")
+			m_SmoothStats = true;
 #endif
 #if ETH_ETHASHCUDA || !ETH_TRUE
 		else if (arg == "--cuda-devices")
@@ -497,6 +499,7 @@ public:
 				))
 				exit(1);
 			EthashGPUMiner::setNumInstances(m_miningThreads);
+
 #else
 			cerr << "Selected GPU mining without having compiled with -DETHASHCL=1" << endl;
 			exit(1);
@@ -590,6 +593,7 @@ public:
 			<< "    --cl-extragpu-mem Set the memory (in MB) you believe your GPU requires for stuff other than mining. default: 0" << endl
 			<< "    --cl-local-work Set the OpenCL local work size. Default is " << toString(ethash_cl_miner::c_defaultLocalWorkSize) << endl
 			<< "    --cl-global-work Set the OpenCL global work size as a multiple of the local work size. Default is " << toString(ethash_cl_miner::c_defaultGlobalWorkSizeMultiplier) << " * " << toString(ethash_cl_miner::c_defaultLocalWorkSize) << endl
+			<< "    --smoother-stats Calculate smoother hash/sec for reporting. Default: Disabled (Use standard ethminer calculation)" << endl
 #endif
 #if ETH_ETHASHCUDA || !ETH_TRUE
 			<< "    --cuda-extragpu-mem Set the memory (in MB) you believe your GPU requires for stuff other than mining. Windows rendering e.t.c.." << endl
@@ -662,7 +666,7 @@ private:
 			this_thread::sleep_for(chrono::seconds(i ? _trialDuration : _warmupDuration));
 
 			auto mp = f.miningProgress();
-			//f.resetMiningProgress();
+			f.resetMiningProgress();
 			if (!i)
 				continue;
 			auto rate = mp.rate();
@@ -745,7 +749,7 @@ private:
 			for (unsigned i = 0; !completed; ++i)
 			{
 				auto mp = f.miningProgress();
-				//f.resetMiningProgress();
+				f.resetMiningProgress();
 
 				cnote << "Mining on difficulty " << difficulty << " " << mp;
 				this_thread::sleep_for(chrono::milliseconds(1000));
@@ -805,6 +809,7 @@ private:
 
 		h256 id = h256::random();
 		GenericFarm<EthashProofOfWork> f;
+		f.setSmoothStats(m_SmoothStats);
 		f.setSealers(sealers);
 		if (_m == MinerType::CL)
 			f.start("opencl", false);
@@ -826,7 +831,7 @@ private:
 				for (unsigned i = 0; !completed; ++i)
 				{
 					auto mp = f.miningProgress();
-				//	f.resetMiningProgress();
+					f.resetMiningProgress();
 					if (current)
 						minelog << "Mining on PoWhash" << "#" + (current.headerHash.hex().substr(0, 8)) << ": " << mp << f.getSolutionStats();
 					else
@@ -981,7 +986,7 @@ private:
 			while (client.isRunning())
 			{
 				auto mp = f.miningProgress();
-			//	f.resetMiningProgress();
+				f.resetMiningProgress();
 				if (client.isConnected())
 				{
 					if (client.current())
@@ -1017,7 +1022,7 @@ private:
 			while (client.isRunning())
 			{
 				auto mp = f.miningProgress();
-			//	f.resetMiningProgress();
+				f.resetMiningProgress();
 				if (client.isConnected())
 				{
 					if (client.current())
@@ -1045,6 +1050,8 @@ private:
 	unsigned m_miningThreads = UINT_MAX;
 	bool m_shouldListDevices = false;
 	bool m_clAllowCPU = false;
+	bool m_SmoothStats = false;
+
 #if ETH_ETHASHCL || !ETH_TRUE
 	unsigned m_openclDeviceCount = 0;
 	unsigned m_openclDevices[16];

@@ -72,7 +72,14 @@ struct MineInfo: public WorkingProgress {};
 inline std::ostream& operator<<(std::ostream& _out, WorkingProgress _p)
 {
 	ostringstream mhs;
-	mhs << std::setprecision(3) << ((float)_p.hashes / (1000.0f*_p.ms));
+
+	if (_p.SmoothStats) {
+		mhs << std::setprecision(3) << ((_p.ms == 0) ? 0.00 : ((float)_p.hashes / (1000.0f*_p.ms)));
+	}
+	else {
+		mhs << std::setprecision(3) << ((float)_p.hashes / (1000.0f*_p.ms));
+	}
+
 	_out << _p.hashDetail + mhs.str() + "MH/s";
 	return _out;
 }
@@ -177,6 +184,8 @@ public:
 
 	uint64_t hashCount() const { return m_hashCount; }
 
+	std::chrono::steady_clock::time_point StartTime() const { return m_StartTime; }
+
 	void resetHashCount() { m_hashCount = 0; }
 
 	unsigned index() const { return m_index; }
@@ -221,6 +230,12 @@ protected:
 
 	void accumulateHashes(unsigned _n) { m_hashCount += _n; }
 
+	void workStarted()
+	{
+		m_StartTime = std::chrono::steady_clock::now();
+		//m_hashCount = 0;
+	}
+
 	static unsigned s_dagLoadMode;
 	static volatile unsigned s_dagLoadIndex;
 	static unsigned s_dagCreateDevice;
@@ -230,6 +245,7 @@ private:
 	unsigned m_index;
 
 	uint64_t m_hashCount = 0;
+	std::chrono::steady_clock::time_point m_StartTime;
 
 	WorkPackage m_work;
 	mutable Mutex x_work;

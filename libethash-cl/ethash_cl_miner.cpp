@@ -558,6 +558,9 @@ void ethash_cl_miner::search(uint8_t const* header, uint64_t target, search_hook
 		uint64_t start_nonce;
 		if (_ethStratum) start_nonce = _startN;
 		else start_nonce = uniform_int_distribution<uint64_t>()(engine);
+
+		hook.workStarted();
+
 		for (;; start_nonce += m_globalWorkSize)
 		{
 			// supply output buffer to kernel

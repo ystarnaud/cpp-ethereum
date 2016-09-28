@@ -226,7 +226,10 @@ struct WorkingProgress
 {
 //	MiningProgress& operator+=(MiningProgress const& _mp) { hashes += _mp.hashes; ms = std::max(ms, _mp.ms); return *this; }
 	uint64_t hashes = 0;		///< Total number of hashes computed.
-	uint32_t ms = 0;			///< Total number of milliseconds of mining thus far.
+	uint64_t ms = 0;			///< Total number of milliseconds of mining thus far.
+	
+	bool SmoothStats = false;
+
 	std::string hashDetail;
 	uint32_t rate() const { return ms == 0 ? 0 : hashes * 1000 / ms; }
 };

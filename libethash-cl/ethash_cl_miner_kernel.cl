@@ -36,193 +36,108 @@ __constant uint2 const Keccak_f1600_RC[24] = {
 	(uint2)(0x80008008, 0x80000000),
 };
 
-#if PLATFORM == OPENCL_PLATFORM_NVIDIA && COMPUTE >= 35
-uint2 ROL2(const uint2 a, const int offset) {
-	uint2 result;
-	if (offset >= 32) {
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(a.x), "r"(a.y), "r"(offset));
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(a.y), "r"(a.x), "r"(offset));
-	}
-	else {
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(a.y), "r"(a.x), "r"(offset));
-		asm("shf.l.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(a.x), "r"(a.y), "r"(offset));
-	}
-	return result;
-}
-#elif PLATFORM == OPENCL_PLATFORM_AMD
-#pragma OPENCL EXTENSION cl_amd_media_ops : enable
-uint2 ROL2(const uint2 vv, const int r)
+/* Wolf0 optimized AMD kernel */
+#define barrier(x) mem_fence(x)
+
+#pragma OPENCL EXTENSION cl_amd_media_ops2 : enable
+
+#define ROTL64_1(x, y)	amd_bitalign((x), (x).s10, 32 - (y))
+#define ROTL64_2(x, y)	amd_bitalign((x).s10, (x), 32 - (y))
+
+
+#define KECCAKF_1600_RND(a, i, outsz) do { \
+    const uint2 m0 = a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20] ^ ROTL64_1(a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22], 1);\
+	const uint2 m1 = a[1] ^ a[6] ^ a[11] ^ a[16] ^ a[21] ^ ROTL64_1(a[3] ^ a[8] ^ a[13] ^ a[18] ^ a[23], 1);\
+    const uint2 m2 = a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22] ^ ROTL64_1(a[4] ^ a[9] ^ a[14] ^ a[19] ^ a[24], 1);\
+    const uint2 m3 = a[3] ^ a[8] ^ a[13] ^ a[18] ^ a[23] ^ ROTL64_1(a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20], 1);\
+    const uint2 m4 = a[4] ^ a[9] ^ a[14] ^ a[19] ^ a[24] ^ ROTL64_1(a[1] ^ a[6] ^ a[11] ^ a[16] ^ a[21], 1);\
+	\
+    const uint2 tmp = a[1]^m0;\
+	\
+    a[0] ^= m4;\
+    a[5] ^= m4; \
+    a[10] ^= m4; \
+    a[15] ^= m4; \
+    a[20] ^= m4; \
+    \
+    a[6] ^= m0; \
+    a[11] ^= m0; \
+    a[16] ^= m0; \
+    a[21] ^= m0; \
+    \
+    a[2] ^= m1; \
+    a[7] ^= m1; \
+    a[12] ^= m1; \
+    a[17] ^= m1; \
+    a[22] ^= m1; \
+    \
+    a[3] ^= m2; \
+    a[8] ^= m2; \
+    a[13] ^= m2; \
+    a[18] ^= m2; \
+    a[23] ^= m2; \
+    \
+    a[4] ^= m3; \
+    a[9] ^= m3; \
+    a[14] ^= m3; \
+    a[19] ^= m3; \
+    a[24] ^= m3; \
+    \
+    a[1] = ROTL64_2(a[6], 12);\
+    a[6] = ROTL64_1(a[9], 20);\
+    a[9] = ROTL64_2(a[22], 29);\
+    a[22] = ROTL64_2(a[14], 7);\
+    a[14] = ROTL64_1(a[20], 18);\
+    a[20] = ROTL64_2(a[2], 30);\
+    a[2] = ROTL64_2(a[12], 11);\
+    a[12] = ROTL64_1(a[13], 25);\
+    a[13] = ROTL64_1(a[19],  8);\
+    a[19] = ROTL64_2(a[23], 24);\
+    a[23] = ROTL64_2(a[15], 9);\
+    a[15] = ROTL64_1(a[4], 27);\
+    a[4] = ROTL64_1(a[24], 14);\
+    a[24] = ROTL64_1(a[21],  2);\
+    a[21] = ROTL64_2(a[8], 23);\
+    a[8] = ROTL64_2(a[16], 13);\
+    a[16] = ROTL64_2(a[5], 4);\
+    a[5] = ROTL64_1(a[3], 28);\
+    a[3] = ROTL64_1(a[18], 21);\
+    a[18] = ROTL64_1(a[17], 15);\
+    a[17] = ROTL64_1(a[11], 10);\
+    a[11] = ROTL64_1(a[7],  6);\
+    a[7] = ROTL64_1(a[10],  3);\
+    a[10] = ROTL64_1(      tmp,  1);\
+    \
+    uint2 m5 = a[0]; uint2 m6 = a[1]; a[0] = bitselect(a[0]^a[2],a[0],a[1]); \
+    a[0] ^= as_uint2(Keccak_f1600_RC[i]); \
+    if (outsz > 1) { \
+		a[1] = bitselect(a[1]^a[3],a[1],a[2]); a[2] = bitselect(a[2]^a[4],a[2],a[3]); a[3] = bitselect(a[3]^m5,a[3],a[4]); a[4] = bitselect(a[4]^m6,a[4],m5);\
+		if (outsz > 4) { \
+			m5 = a[5]; m6 = a[6]; a[5] = bitselect(a[5]^a[7],a[5],a[6]); a[6] = bitselect(a[6]^a[8],a[6],a[7]); a[7] = bitselect(a[7]^a[9],a[7],a[8]); a[8] = bitselect(a[8]^m5,a[8],a[9]); a[9] = bitselect(a[9]^m6,a[9],m5);\
+			if (outsz > 8) { \
+				m5 = a[10]; m6 = a[11]; a[10] = bitselect(a[10]^a[12],a[10],a[11]); a[11] = bitselect(a[11]^a[13],a[11],a[12]); a[12] = bitselect(a[12]^a[14],a[12],a[13]); a[13] = bitselect(a[13]^m5,a[13],a[14]); a[14] = bitselect(a[14]^m6,a[14],m5);\
+				m5 = a[15]; m6 = a[16]; a[15] = bitselect(a[15]^a[17],a[15],a[16]); a[16] = bitselect(a[16]^a[18],a[16],a[17]); a[17] = bitselect(a[17]^a[19],a[17],a[18]); a[18] = bitselect(a[18]^m5,a[18],a[19]); a[19] = bitselect(a[19]^m6,a[19],m5);\
+				m5 = a[20]; m6 = a[21]; a[20] = bitselect(a[20]^a[22],a[20],a[21]); a[21] = bitselect(a[21]^a[23],a[21],a[22]); a[22] = bitselect(a[22]^a[24],a[22],a[23]); a[23] = bitselect(a[23]^m5,a[23],a[24]); a[24] = bitselect(a[24]^m6,a[24],m5);\
+			} \
+		} \
+	} \
+     \
+} while(0)
+
+#define KECCAK_PROCESS(st, in_size, out_size, isolate)	do { \
+		for (int r = 0;r < (23);) { \
+			if (isolate) { KECCAKF_1600_RND(((uint2 *)st), r++, 25); } \
+		} \
+		KECCAKF_1600_RND(((uint2 *)st), 23, out_size); \
+} while(0)
+
+
+#define fnv(x, y)		((x) * FNV_PRIME ^ (y))
+#define fnv_reduce(v)	fnv(fnv(fnv(v.x, v.y), v.z), v.w)
+
+typedef union
 {
-	if (r <= 32)
-	{
-		return amd_bitalign((vv).xy, (vv).yx, 32 - r);
-	}
-	else
-	{
-		return amd_bitalign((vv).yx, (vv).xy, 64 - r);
-	}
-}
-#else
-uint2 ROL2(const uint2 v, const int n)
-{
-	uint2 result;
-	if (n <= 32)
-	{
-		result.y = ((v.y << (n)) | (v.x >> (32 - n)));
-		result.x = ((v.x << (n)) | (v.y >> (32 - n)));
-	}
-	else
-	{
-		result.y = ((v.x << (n - 32)) | (v.y >> (64 - n)));
-		result.x = ((v.y << (n - 32)) | (v.x >> (64 - n)));
-	}
-	return result;
-}
-#endif
-
-void chi(uint2 * a, const uint n, const uint2 * t)
-{
-	a[n + 0] = bitselect(t[n + 0] ^ t[n + 2], t[n + 0], t[n + 1]);
-	a[n + 1] = bitselect(t[n + 1] ^ t[n + 3], t[n + 1], t[n + 2]);
-	a[n + 2] = bitselect(t[n + 2] ^ t[n + 4], t[n + 2], t[n + 3]);
-	a[n + 3] = bitselect(t[n + 3] ^ t[n + 0], t[n + 3], t[n + 4]);
-	a[n + 4] = bitselect(t[n + 4] ^ t[n + 1], t[n + 4], t[n + 0]);
-}
-
-void keccak_f1600_round(uint2* a, uint r)
-{
-	uint2 t[25];
-	uint2 u;
-
-	// Theta
-	t[0] = a[0] ^ a[5] ^ a[10] ^ a[15] ^ a[20];
-	t[1] = a[1] ^ a[6] ^ a[11] ^ a[16] ^ a[21];
-	t[2] = a[2] ^ a[7] ^ a[12] ^ a[17] ^ a[22];
-	t[3] = a[3] ^ a[8] ^ a[13] ^ a[18] ^ a[23];
-	t[4] = a[4] ^ a[9] ^ a[14] ^ a[19] ^ a[24];
-	u = t[4] ^ ROL2(t[1], 1);
-	a[0] ^= u;
-	a[5] ^= u;
-	a[10] ^= u;
-	a[15] ^= u;
-	a[20] ^= u;
-	u = t[0] ^ ROL2(t[2], 1);
-	a[1] ^= u;
-	a[6] ^= u;
-	a[11] ^= u;
-	a[16] ^= u;
-	a[21] ^= u;
-	u = t[1] ^ ROL2(t[3], 1);
-	a[2] ^= u;
-	a[7] ^= u;
-	a[12] ^= u;
-	a[17] ^= u;
-	a[22] ^= u;
-	u = t[2] ^ ROL2(t[4], 1);
-	a[3] ^= u;
-	a[8] ^= u;
-	a[13] ^= u;
-	a[18] ^= u;
-	a[23] ^= u;
-	u = t[3] ^ ROL2(t[0], 1);
-	a[4] ^= u;
-	a[9] ^= u;
-	a[14] ^= u;
-	a[19] ^= u;
-	a[24] ^= u;
-
-	// Rho Pi
-
-	t[0] = a[0];
-	t[10] = ROL2(a[1], 1);
-	t[20] = ROL2(a[2], 62);
-	t[5] = ROL2(a[3], 28);
-	t[15] = ROL2(a[4], 27);
-
-	t[16] = ROL2(a[5], 36);
-	t[1] = ROL2(a[6], 44);
-	t[11] = ROL2(a[7], 6);
-	t[21] = ROL2(a[8], 55);
-	t[6] = ROL2(a[9], 20);
-
-	t[7] = ROL2(a[10], 3);
-	t[17] = ROL2(a[11], 10);
-	t[2] = ROL2(a[12], 43);
-	t[12] = ROL2(a[13], 25);
-	t[22] = ROL2(a[14], 39);
-
-	t[23] = ROL2(a[15], 41);
-	t[8] = ROL2(a[16], 45);
-	t[18] = ROL2(a[17], 15);
-	t[3] = ROL2(a[18], 21);
-	t[13] = ROL2(a[19], 8);
-
-	t[14] = ROL2(a[20], 18);
-	t[24] = ROL2(a[21], 2);
-	t[9] = ROL2(a[22], 61);
-	t[19] = ROL2(a[23], 56);
-	t[4] = ROL2(a[24], 14);
-
-	// Chi
-	chi(a, 0, t);
-
-	// Iota
-	a[0] ^= Keccak_f1600_RC[r];
-
-	chi(a, 5, t);
-	chi(a, 10, t);
-	chi(a, 15, t);
-	chi(a, 20, t);
-}
-
-void keccak_f1600_no_absorb(uint2* a, uint out_size, uint isolate)
-{
-	// Originally I unrolled the first and last rounds to interface
-	// better with surrounding code, however I haven't done this
-	// without causing the AMD compiler to blow up the VGPR usage.
-
-
-	//uint o = 25;
-	for (uint r = 0; r < 24;)
-	{
-		// This dynamic branch stops the AMD compiler unrolling the loop
-		// and additionally saves about 33% of the VGPRs, enough to gain another
-		// wavefront. Ideally we'd get 4 in flight, but 3 is the best I can
-		// massage out of the compiler. It doesn't really seem to matter how
-		// much we try and help the compiler save VGPRs because it seems to throw
-		// that information away, hence the implementation of keccak here
-		// doesn't bother.
-		if (isolate)
-		{
-			keccak_f1600_round(a, r++);
-			//if (r == 23) o = out_size;
-		}
-	}
-
-
-	// final round optimised for digest size
-	//keccak_f1600_round(a, 23, out_size);
-}
-
-#define copy(dst, src, count) for (uint i = 0; i != count; ++i) { (dst)[i] = (src)[i]; }
-
-uint fnv(uint x, uint y)
-{
-	return x * FNV_PRIME ^ y;
-}
-
-uint4 fnv4(uint4 x, uint4 y)
-{
-	return x * FNV_PRIME ^ y;
-}
-
-uint fnv_reduce(uint4 v)
-{
-	return fnv(fnv(fnv(v.x, v.y), v.z), v.w);
-}
-
-typedef struct
-{
+	uint uints[32 / sizeof(uint)];
 	ulong ulongs[32 / sizeof(ulong)];
 } hash32_t;
 
@@ -235,126 +150,149 @@ typedef union {
 typedef union {
 	uint	 words[200 / sizeof(uint)];
 	uint2	 uint2s[200 / sizeof(uint2)];
+	ulong	 ulongs[200 / sizeof(ulong)];
 	uint4	 uint4s[200 / sizeof(uint4)];
 } hash200_t;
 
-typedef struct
+typedef union
 {
+	uint uints[128 / sizeof(uint)];
+	ulong ulongs[128 / sizeof(ulong)];
+	uint2 uint2s[128 / sizeof(uint2)];
 	uint4 uint4s[128 / sizeof(uint4)];
+	uint8 uint8s[128 / sizeof(uint8)];
+	uint16 uint16s[128 / sizeof(uint16)];
+	ulong8 ulong8s[128 / sizeof(ulong8)];
 } hash128_t;
 
+
 typedef union {
+	ulong8 ulong8s[1];
+	ulong4 ulong4s[2];
+	uint2 uint2s[8];
 	uint4 uint4s[4];
+	uint8 uint8s[2];
+	uint16 uint16s[1];
 	ulong ulongs[8];
 	uint  uints[16];
 } compute_hash_share;
 
-#if PLATFORM != OPENCL_PLATFORM_NVIDIA // use maxrregs on nv
 __attribute__((reqd_work_group_size(GROUP_SIZE, 1, 1)))
-#endif
 __kernel void ethash_search(
-__global volatile uint* restrict g_output,
-__constant hash32_t const* g_header,
-__global hash128_t const* g_dag,
-ulong start_nonce,
-ulong target,
-uint isolate
-)
+	__global volatile uint* restrict g_output,
+	__constant hash32_t const* g_header,
+	__global hash128_t const* g_dag,
+	ulong start_nonce,
+	ulong target,
+	uint isolate
+	)
 {
-	__local compute_hash_share share[HASHES_PER_LOOP];
-
-	uint const gid = get_global_id(0);
-
-	// Compute one init hash per work item.
+	const uint gid = get_global_id(0);
+	const uint thread_id = get_local_id(0) % 4;
+	const uint hash_id = get_local_id(0) / 4;
+	
+	__local compute_hash_share sharebuf[GROUP_SIZE / 4];
+	__local compute_hash_share * const share = sharebuf + hash_id;
 
 	// sha3_512(header .. nonce)
-	ulong state[25];
-	copy(state, g_header->ulongs, 4);
-	state[4] = start_nonce + gid;
-
-	for (uint i = 6; i != 25; ++i)
-	{
-		state[i] = 0;
-	}
-	state[5] = 0x0000000000000001;
-	state[8] = 0x8000000000000000;
-
-	keccak_f1600_no_absorb((uint2*)state, 8, isolate);
-
-	// Threads work together in this phase in groups of 8.
-	uint const thread_id = gid & 7;
-	uint const hash_id = (gid % GROUP_SIZE) >> 3;
-
-	for (int i = 0; i < THREADS_PER_HASH; i++)
+	uint2 state[25] = { 0UL };
+			
+	((ulong4 *)state)[0] = ((__constant ulong4 *)g_header)[0];
+	state[4] = as_uint2(start_nonce + gid);
+	
+	state[5] = as_uint2(0x0000000000000001UL);
+	state[8] = as_uint2(0x8000000000000000UL);
+	
+	KECCAK_PROCESS(state, 5, 8, isolate);
+	
+	uint init0;
+	uint8 mix;
+	
+	#pragma unroll 1
+	for (uint tid = 0; tid < 4; tid++)
 	{
 		// share init with other threads
-		if (i == thread_id)
-			copy(share[hash_id].ulongs, state, 8);
-
+		if (tid == thread_id)
+			share->ulong8s[0] = ((ulong8 *)state)[0];
+	
 		barrier(CLK_LOCAL_MEM_FENCE);
-
-		uint4 mix = share[hash_id].uint4s[thread_id & 3];
-			barrier(CLK_LOCAL_MEM_FENCE);
-
-		__local uint *share0 = share[hash_id].uints;
-
-		// share init0
-		if (thread_id == 0)
-			*share0 = mix.x;
+		
+		// It's done like it was because of the duplication
+		// We can do the same - with uint8s.
+		mix = share->uint8s[thread_id & 1];
+	
+		init0 = share->uints[0];
 		barrier(CLK_LOCAL_MEM_FENCE);
-		uint init0 = *share0;
-
-		for (uint a = 0; a < ACCESSES; a += 4)
+		
+		#pragma unroll 1
+		for (uint a = 0; a < (ACCESSES & isolate); a += 8)
 		{
-			bool update_share = thread_id == ((a >> 2) & (THREADS_PER_HASH - 1));
-
-			for (uint i = 0; i != 4; ++i)
+			#pragma unroll
+			for (uint y = 0; y < 8; ++y)
 			{
-				if (update_share)
-				{
-					*share0 = fnv(init0 ^ (a + i), ((uint *)&mix)[i]) % DAG_SIZE;
-				}
+				if (thread_id == amd_bfe(a, 3U, 2U))
+					share->uints[0] = fnv(init0 ^ (a + y), ((uint *)&mix)[y]) % DAG_SIZE;
+			
 				barrier(CLK_LOCAL_MEM_FENCE);
-
-				mix = fnv4(mix, g_dag[*share0].uint4s[thread_id]);
+				
+				mix = fnv(mix, g_dag[share->uints[0]].uint8s[thread_id]);
 			}
 		}
-
-		share[hash_id].uints[thread_id] = fnv_reduce(mix);
+		
+		share->uint2s[thread_id] = (uint2)(fnv_reduce(mix.lo), fnv_reduce(mix.hi));
+		
 		barrier(CLK_LOCAL_MEM_FENCE);
-
-		if (i == thread_id)
-			copy(state + 8, share[hash_id].ulongs, 4);
-
-		barrier(CLK_LOCAL_MEM_FENCE);
+		
+		if (tid == thread_id)
+			((ulong4 *)state)[2] = share->ulong4s[0];
 	}
-
-	for (uint i = 13; i != 25; ++i)
-	{
-		state[i] = 0;
-	}
-	state[12] = 0x0000000000000001;
-	state[16] = 0x8000000000000000;
-
-	// keccak_256(keccak_512(header..nonce) .. mix);
-	keccak_f1600_no_absorb((uint2*)state, 1, isolate);
-
+	
+	#pragma unroll
+	for (uint i = 13; i < 25; ++i)
+		state[i] = (uint2)(0U, 0U);
+	state[12] = as_uint2(0x0000000000000001UL);
+	state[16] = as_uint2(0x8000000000000000UL);
+	
+	KECCAK_PROCESS(state, 12, 1, isolate);
+	
 	if (as_ulong(as_uchar8(state[0]).s76543210) < target)
 	{
+//		uint slot = min(MAX_OUTPUTS-1u, convert_uint(atomic_inc(&g_output[MAX_OUTPUTS])));
 		uint slot = min(MAX_OUTPUTS, atomic_inc(&g_output[0]) + 1);
 		g_output[slot] = gid;
 	}
 }
 
-void SHA3_512(uint2* s, uint isolate)
+typedef union _Node
 {
+	uint dwords[16];
+	uint2 qwords[8];
+	uint4 dqwords[4];
+} Node;
+
+static void SHA3_512(uint2 *s, uint isolate)
+{
+	uint2 st[25];
+	
+	for (uint i = 0; i < 8; ++i)
+		st[i] = s[i];
+	
 	for (uint i = 8; i != 25; ++i)
-	{
-		s[i] = (uint2){ 0, 0 };
-	}
-	s[8].x = 0x00000001;
-	s[8].y = 0x80000000;
-	keccak_f1600_no_absorb(s, 8, isolate);
+    	st[i] = (uint2){ 0, 0 };
+	
+	((uint2 *)st)[8].x = 0x00000001;
+	((uint2 *)st)[8].y = 0x80000000;
+	KECCAK_PROCESS(st, 8, 8, isolate);
+	
+	for (uint i = 0; i < 8; ++i)
+		s[i] = st[i];
+}
+
+#define copy(dst, src, count) for (uint i = 0; i != count; ++i) { (dst)[i] = (src)[i]; }
+
+uint4 fnv4(uint4 x, uint4 y)
+{
+	return x * FNV_PRIME ^ y;
 }
 
 __kernel void ethash_calculate_dag_item(uint start, __global hash64_t const* g_light, __global hash64_t * g_dag, uint isolate)

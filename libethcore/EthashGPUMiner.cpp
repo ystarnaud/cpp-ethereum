@@ -89,6 +89,11 @@ protected:
 		return false;
 	}
 
+	virtual void workStarted() override
+	{
+		m_owner->workStarted();
+	}
+
 private:
 	Mutex x_all;
 	uint64_t m_last;

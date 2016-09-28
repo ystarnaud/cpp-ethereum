@@ -19,7 +19,7 @@
 class ethash_cl_miner
 {
 private:
-	enum { c_maxSearchResults = 63, c_bufferCount = 2, c_hashBatchSize = 1024 };
+	enum { c_maxSearchResults = 255, c_bufferCount = 1, c_hashBatchSize = 1024 };
 
 public:
 	struct search_hook
@@ -29,6 +29,7 @@ public:
 		// reports progress, return true to abort
 		virtual bool found(uint64_t const* nonces, uint32_t count) = 0;
 		virtual bool searched(uint64_t start_nonce, uint32_t count) = 0;
+		virtual void workStarted() = 0;
 	};
 
 	ethash_cl_miner();

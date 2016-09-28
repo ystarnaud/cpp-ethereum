@@ -78,6 +78,11 @@ public:
 
 	void setSealers(std::map<std::string, SealerDescriptor> const& _sealers) { m_sealers = _sealers; }
 
+	void setSmoothStats(bool flag)
+	{
+		m_SmoothStats = flag;
+	}
+
 	/**
 	 * @brief Start a number of miners.
 	 */
@@ -138,20 +143,50 @@ public:
 	WorkingProgress const& miningProgress() const
 	{
 		WorkingProgress p;
-		p.ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_lastStart).count();
-		if (p.ms == 0) p.ms = 1;		// avoid divide by zero
-		{
-			ReadGuard l2(x_minerWork);
+
+		p.SmoothStats = m_SmoothStats;
+
+		if (!m_SmoothStats) {
+			p.ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_lastStart).count();
+
+			if (p.ms == 0) {
+				p.ms = 1;		// avoid divide by zero
+			}
+		}
+		else {
+			p.ms = 0;
+		}
+
+		ReadGuard l2(x_minerWork);
+		if (m_miners.size() > 1) {
 			for (unsigned i = 0; i < m_miners.size(); i++){
 				auto m = m_miners[i];
 				p.hashes += m->hashCount();
 
 				ostringstream mhs;
-				mhs << std::setprecision(3) << ((float)m->hashCount() / (1000.0f*p.ms));
+
+				if (m_SmoothStats) {
+
+					uint32_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_miners[i]->StartTime()).count();
+					p.ms += ms;
+					mhs << std::setprecision(3) << ((ms == 0) ? 0.00 : ((float)m->hashCount() / (1000.0f*ms)));
+				}
+				else {
+					mhs << std::setprecision(3) << ((float)m->hashCount() / (1000.0f*p.ms));
+				}
+
 				string sep = i < m_miners.size() - 1 ? "+" : "=";
 				p.hashDetail += mhs.str() + sep; 
 			}
 		}
+		else if (m_miners.size() == 1) {
+			p.hashes += m_miners[0]->hashCount();
+
+			if (m_SmoothStats) {
+				p.ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_miners[0]->StartTime()).count();
+			}
+		}
+
 		ReadGuard l(x_progress);
 		m_progress = p;
 		return m_progress;
@@ -162,10 +197,12 @@ public:
 	 */
 	void resetMiningProgress()
 	{
-		DEV_READ_GUARDED(x_minerWork)
-			for (auto const& i: m_miners)
-				i->resetHashCount();
-		resetTimer();
+		if (!m_SmoothStats) {
+			DEV_READ_GUARDED(x_minerWork)
+				for (auto const& i: m_miners)
+					i->resetHashCount();
+			resetTimer();
+		}
 	}
 
 	SolutionStats getSolutionStats() {
@@ -237,6 +274,8 @@ private:
 	{
 		m_lastStart = std::chrono::steady_clock::now();
 	}
+
+	bool m_SmoothStats = false;
 
 	mutable SharedMutex x_minerWork;
 	std::vector<std::shared_ptr<Miner>> m_miners;
